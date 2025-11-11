@@ -1,0 +1,27 @@
+From 4b1d9da51dc2703b7596243cb555a689bb27b4c1 Mon Sep 17 00:00:00 2001
+From: Luca Boccassi <luca.boccassi@gmail.com>
+Date: Wed, 16 Apr 2025 21:17:56 +0100
+Subject: [PATCH] util/sockopt: also check for ESRCH when the process has
+ exited
+
+The kernel in 6.16 is changing the return value from EINVAL to ESRCH so
+that the particular case can be distinguished from generic errors:
+
+https://lore.kernel.org/all/20250411-work-pidfs-enoent-v2-2-60b2d3bb545f@kernel.org/
+---
+ src/util/sockopt.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/util/sockopt.c b/src/util/sockopt.c
+index a374e59d..4270314d 100644
+--- a/src/util/sockopt.c
++++ b/src/util/sockopt.c
+@@ -238,7 +238,7 @@ int sockopt_get_peerpidfd(int fd, int *pidfdp) {
+                         return SOCKOPT_E_UNSUPPORTED;
+                 if (errno == ENODATA)
+                         return SOCKOPT_E_UNAVAILABLE;
+-                if (errno == EINVAL)
++                if (errno == EINVAL || errno == ESRCH)
+                         return SOCKOPT_E_REAPED;
+ 
+                 return error_origin(-errno);
