@@ -1,0 +1,46 @@
+From 3b9e477bb8d7b48dea97439e5ae41e9cfed11852 Mon Sep 17 00:00:00 2001
+From: David Rheinsberg <david@readahead.eu>
+Date: Wed, 24 Jun 2026 11:33:35 +0200
+Subject: [PATCH] bus/peer: account peer-pidfd on peers
+
+Ensure that pidfds are properly accounted on a peer. They represent
+internal resources a peer pins, so it better be accounted on them.
+
+Note that we do not strictly account each and every pinned byte and
+other resource, but grant peers some leeway, as long as it is fixed in
+size. However, for file-descriptors, being a bit more strict seems like
+a good decision.
+
+Signed-off-by: David Rheinsberg <david@readahead.eu>
+(cherry picked from commit c4a3c886366f7bd566ec9a55b3855ade8290fa17)
+---
+ src/bus/peer.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/src/bus/peer.c b/src/bus/peer.c
+index 9d64d78..4ac0938 100644
+--- a/src/bus/peer.c
++++ b/src/bus/peer.c
+@@ -261,7 +261,7 @@ int peer_new_with_fd(Peer **peerp,
+         _c_cleanup_(c_freep) char *seclabel = NULL;
+         _c_cleanup_(c_closep) int pid_fd = -1;
+         CRBNode **slot, *parent;
+-        size_t n_seclabel, n_gids = 0;
++        size_t n_fds, n_seclabel, n_gids = 0;
+         struct ucred ucred;
+         socklen_t socklen = sizeof(ucred);
+         int r;
+@@ -310,8 +310,9 @@ int peer_new_with_fd(Peer **peerp,
+         seclabel = NULL;
+         peer->n_seclabel = n_seclabel;
+ 
++        n_fds = 1 + !!(peer->pid_fd >= 0);
+         r = user_charge(peer->user, &peer->charges[0], NULL, USER_SLOT_BYTES, sizeof(Peer));
+-        r = r ?: user_charge(peer->user, &peer->charges[1], NULL, USER_SLOT_FDS, 1);
++        r = r ?: user_charge(peer->user, &peer->charges[1], NULL, USER_SLOT_FDS, n_fds);
+         r = r ?: user_charge(peer->user, &peer->charges[2], NULL, USER_SLOT_OBJECTS, 1);
+         if (r) {
+                 if (r == USER_E_QUOTA)
+-- 
+2.55.0
+
