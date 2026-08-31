@@ -1,0 +1,87 @@
+From c773e46910569608f62c3b7eff044fdac09c0c13 Mon Sep 17 00:00:00 2001
+From: David Rheinsberg <david@readahead.eu>
+Date: Wed, 24 Jun 2026 11:52:23 +0200
+Subject: [PATCH] broker/main: bump RLIMIT_NOFILE to hard limit
+
+Ensure that we can allocate enough FDs to serve the limits configured by
+the system. Bump NOFILE to the hard-limit set for us.
+
+Reported-by: Josh Simmons <josh@nega.tv>
+Signed-off-by: David Rheinsberg <david@readahead.eu>
+(cherry picked from commit aaa9fd6bbc2d5d7bfeca039f9c457b7f88a50dde)
+---
+ src/broker/main.c |  5 +++++
+ src/util/misc.c   | 20 ++++++++++++++++++++
+ src/util/misc.h   |  1 +
+ 3 files changed, 26 insertions(+)
+
+diff --git a/src/broker/main.c b/src/broker/main.c
+index 292b2bb..327f5a2 100644
+--- a/src/broker/main.c
++++ b/src/broker/main.c
+@@ -13,6 +13,7 @@
+ #include "broker/main.h"
+ #include "util/audit.h"
+ #include "util/error.h"
++#include "util/misc.h"
+ #include "util/selinux.h"
+ #include "util/string.h"
+ 
+@@ -247,6 +248,10 @@ static int setup(void) {
+         if (r < 0)
+                 return error_origin(-errno);
+ 
++        r = util_bump_nofile();
++        if (r < 0)
++                return error_fold(r);
++
+         return 0;
+ }
+ 
+diff --git a/src/util/misc.c b/src/util/misc.c
+index c0206db..e99ac49 100644
+--- a/src/util/misc.c
++++ b/src/util/misc.c
+@@ -7,6 +7,7 @@
+ #include <c-stdaux.h>
+ #include <grp.h>
+ #include <stdlib.h>
++#include <sys/resource.h>
+ #include <unistd.h>
+ #include "util/error.h"
+ #include "util/misc.h"
+@@ -46,3 +47,22 @@ int util_drop_permissions(uint32_t uid, uint32_t gid) {
+ 
+         return 0;
+ }
++
++int util_bump_nofile(void) {
++        struct rlimit rl;
++        int r;
++
++        r = getrlimit(RLIMIT_NOFILE, &rl);
++        if (r < 0)
++                return error_origin(-errno);
++
++        if (rl.rlim_cur < rl.rlim_max) {
++                rl.rlim_cur = rl.rlim_max;
++
++                r = setrlimit(RLIMIT_NOFILE, &rl);
++                if (r < 0)
++                        return error_origin(-errno);
++        }
++
++        return 0;
++}
+diff --git a/src/util/misc.h b/src/util/misc.h
+index 47eda00..f5b04bd 100644
+--- a/src/util/misc.h
++++ b/src/util/misc.h
+@@ -9,3 +9,4 @@
+ 
+ uint64_t util_umul64_saturating(uint64_t a, uint64_t b);
+ int util_drop_permissions(uint32_t uid, uint32_t gid);
++int util_bump_nofile(void);
+-- 
+2.55.0
+

@@ -2,7 +2,7 @@
 
 Name:                 dbus-broker
 Version:              28
-Release:              7%{?dist}
+Release:              9%{?dist}
 Summary:              Linux D-Bus Message Broker
 License:              ASL 2.0
 URL:                  https://github.com/bus1/dbus-broker
@@ -12,6 +12,8 @@ Patch0001:            https://github.com/bus1/dbus-broker/commit/b82b670bfec6600
 Patch0002:            cve-2022-31212.patch
 Patch0003:            cve-2022-31213.patch
 Patch0004:            https://github.com/bus1/dbus-broker/commit/33e0595b1c7cf8fa0e7ca3a353f4380c1307dc25.patch
+Patch0005:            https://github.com/bus1/dbus-broker/commit/aaa9fd6bbc2d5d7bfeca039f9c457b7f88a50dde.patch
+Patch0006:            https://github.com/bus1/dbus-broker/commit/c4a3c886366f7bd566ec9a55b3855ade8290fa17.patch
 %{?systemd_requires}
 BuildRequires:        pkgconfig(audit)
 BuildRequires:        pkgconfig(expat)
@@ -25,7 +27,6 @@ BuildRequires:        glibc-devel
 BuildRequires:        meson
 BuildRequires:        python3-docutils
 Requires:             dbus-common
-Requires(pre):        shadow-utils
 Requires(post):       /usr/bin/systemctl
 # for triggerpostun
 Requires:             /usr/bin/systemctl
@@ -40,6 +41,11 @@ recent Linux kernel releases.
 %prep
 %autosetup -p1
 
+# Create a sysusers.d config file
+cat >dbus-broker.sysusers.conf <<EOF
+u dbus %{dbus_user_id} 'System Message Bus' - -
+EOF
+
 %build
 %meson -Dselinux=true -Daudit=true -Ddocs=true -Dsystem-console-users=gdm -Dlinux-4-17=true
 %meson_build
@@ -47,20 +53,10 @@ recent Linux kernel releases.
 %install
 %meson_install
 
+install -m0644 -D dbus-broker.sysusers.conf %{buildroot}%{_sysusersdir}/dbus-broker.conf
+
 %check
 %meson_test
-
-%pre
-# create dbus user and group
-getent group dbus >/dev/null || groupadd -f -g %{dbus_user_id} -r dbus
-if ! getent passwd dbus >/dev/null ; then
-    if ! getent passwd %{dbus_user_id} >/dev/null ; then
-      useradd -r -u %{dbus_user_id} -g %{dbus_user_id} -d '/' -s /sbin/nologin -c "System message bus" dbus
-    else
-      useradd -r -g %{dbus_user_id} -d '/' -s /sbin/nologin -c "System message bus" dbus
-    fi
-fi
-exit 0
 
 %post
 %systemd_post dbus-broker.service
@@ -96,8 +92,17 @@ fi
 %{_mandir}/man1/dbus-broker-launch.1*
 %{_unitdir}/dbus-broker.service
 %{_userunitdir}/dbus-broker.service
+%{_sysusersdir}/dbus-broker.conf
 
 %changelog
+* Tue Aug 11 2026 Siteshwar Vashisht <svashisht@redhat.com> - 28-9
+- Fix session bus denial of service via EMFILE during peer setup.
+Resolves: RHEL-233014
+
+* Mon Sep 22 2025 Lukas Nykryn <lnykryn@redhat.com> - 28-8
+- Switch from useradd to systemd sysusers
+Resolves: RHEL-109036
+
 * Mon Aug 22 2022 Frantisek Sumsal <fsumsal@redhat.com> - 28-7
 - Add coverage for CVE-2022-31213 and other config-file-related issues
 Related: CVE-2022-31213
@@ -314,4 +319,3 @@ Resolves: CVE-2022-31213
 
 * Sun Aug 13 2017 Tom Gundersen <teg@jklm.no> - 1-1
 - Initial RPM release
-
