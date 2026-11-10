@@ -1,12 +1,11 @@
-%global dbus_user_id 81
-
 Name:                 dbus-broker
 Version:              28
-Release:              9%{?dist}
+Release:              10%{?dist}
 Summary:              Linux D-Bus Message Broker
 License:              ASL 2.0
 URL:                  https://github.com/bus1/dbus-broker
 Source0:              https://github.com/bus1/dbus-broker/releases/download/v%{version}/dbus-broker-%{version}.tar.xz
+Source1:              dbus-broker.sysusers.conf
 Patch0000:            https://github.com/bus1/dbus-broker/commit/1add8a7d60e46806e0ef87994d3024245db0d84a.patch
 Patch0001:            https://github.com/bus1/dbus-broker/commit/b82b670bfec6600d0144bcb9ca635fb07c80118f.patch
 Patch0002:            cve-2022-31212.patch
@@ -26,6 +25,8 @@ BuildRequires:        gcc
 BuildRequires:        glibc-devel
 BuildRequires:        meson
 BuildRequires:        python3-docutils
+BuildRequires:        systemd-rpm-macros
+%{?sysusers_requires_compat}
 Requires:             dbus-common
 Requires(post):       /usr/bin/systemctl
 # for triggerpostun
@@ -41,11 +42,6 @@ recent Linux kernel releases.
 %prep
 %autosetup -p1
 
-# Create a sysusers.d config file
-cat >dbus-broker.sysusers.conf <<EOF
-u dbus %{dbus_user_id} 'System Message Bus' - -
-EOF
-
 %build
 %meson -Dselinux=true -Daudit=true -Ddocs=true -Dsystem-console-users=gdm -Dlinux-4-17=true
 %meson_build
@@ -53,10 +49,13 @@ EOF
 %install
 %meson_install
 
-install -m0644 -D dbus-broker.sysusers.conf %{buildroot}%{_sysusersdir}/dbus-broker.conf
+install -m0644 -D %{SOURCE1} %{buildroot}%{_sysusersdir}/dbus-broker.conf
 
 %check
 %meson_test
+
+%pre
+%sysusers_create_compat %{SOURCE1}
 
 %post
 %systemd_post dbus-broker.service
@@ -95,9 +94,13 @@ fi
 %{_sysusersdir}/dbus-broker.conf
 
 %changelog
-* Tue Aug 11 2026 Siteshwar Vashisht <svashisht@redhat.com> - 28-9
-- Fix session bus denial of service via EMFILE during peer setup.
-Resolves: RHEL-233014
+* Tue Aug 25 2026 Siteshwar Vashisht <svashisht@redhat.com> - 28-10
+- Fix session bus denial of service via EMFILE during peer setup
+Resolves: RHEL-233011
+
+* Tue May 19 2026 Siteshwar Vashisht <svashisht@redhat.com> - 28-9
+- Use systemd-sysusers to create users
+  Resolves: RHEL-109036
 
 * Mon Sep 22 2025 Lukas Nykryn <lnykryn@redhat.com> - 28-8
 - Switch from useradd to systemd sysusers
